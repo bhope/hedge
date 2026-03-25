@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-// TestWindowed_RecentDataPresent verifies that values added to the current
-// window are always visible via Quantile.
 func TestWindowed_RecentDataPresent(t *testing.T) {
 	w := NewWindowedSketch(0.01, time.Hour) // long window — no rotation during test
 	defer w.Stop()
@@ -27,15 +25,11 @@ func TestWindowed_RecentDataPresent(t *testing.T) {
 	}
 }
 
-// TestWindowed_OldDataEvicted verifies that data older than 2× windowDuration
-// is no longer visible. After two rotations the sketch that held the old data
-// has been replaced, so it should return NaN (no data in either sketch).
 func TestWindowed_OldDataEvicted(t *testing.T) {
 	const window = 50 * time.Millisecond
 	w := NewWindowedSketch(0.01, window)
 	defer w.Stop()
 
-	// Add data, then wait long enough for two full rotations.
 	for i := 1; i <= 100; i++ {
 		w.Add(float64(i))
 	}
@@ -48,14 +42,11 @@ func TestWindowed_OldDataEvicted(t *testing.T) {
 	}
 }
 
-// TestWindowed_SlideRetainsMiddleWindow checks that data from the previous
-// window is still visible right after a single rotation.
 func TestWindowed_SlideRetainsMiddleWindow(t *testing.T) {
 	const window = 50 * time.Millisecond
 	w := NewWindowedSketch(0.01, window)
 	defer w.Stop()
 
-	// Add data before the first rotation.
 	for i := 1; i <= 1000; i++ {
 		w.Add(float64(i))
 	}
@@ -70,7 +61,6 @@ func TestWindowed_SlideRetainsMiddleWindow(t *testing.T) {
 	}
 }
 
-// TestWindowed_Empty verifies that Quantile returns NaN on a fresh sketch.
 func TestWindowed_Empty(t *testing.T) {
 	w := NewWindowedSketch(0.01, time.Hour)
 	defer w.Stop()
@@ -80,8 +70,6 @@ func TestWindowed_Empty(t *testing.T) {
 	}
 }
 
-// TestWindowed_ConcurrentAddQuantile exercises concurrent Add and Quantile
-// calls to detect data races. Run with: go test -race ./sketch/...
 func TestWindowed_ConcurrentAddQuantile(t *testing.T) {
 	w := NewWindowedSketch(0.01, 20*time.Millisecond)
 	defer w.Stop()
@@ -132,8 +120,6 @@ func TestWindowed_ConcurrentAddQuantile(t *testing.T) {
 	wg.Wait()
 }
 
-// TestWindowed_Stop verifies that Stop returns and the background goroutine
-// exits cleanly. If Stop blocks indefinitely the test will time out.
 func TestWindowed_Stop(t *testing.T) {
 	w := NewWindowedSketch(0.01, 50*time.Millisecond)
 
@@ -145,7 +131,6 @@ func TestWindowed_Stop(t *testing.T) {
 
 	select {
 	case <-stopped:
-		// clean exit
 	case <-time.After(2 * time.Second):
 		t.Fatal("Stop() did not return within 2s")
 	}

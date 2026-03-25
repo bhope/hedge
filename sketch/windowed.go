@@ -46,7 +46,6 @@ func NewWindowedSketch(relativeAccuracy float64, windowDuration time.Duration) *
 	return w
 }
 
-// Add records a value into the current window.
 func (w *WindowedSketch) Add(value float64) {
 	w.mu.Lock()
 	w.current.Add(value)

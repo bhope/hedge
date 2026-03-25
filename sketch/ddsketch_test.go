@@ -54,8 +54,6 @@ func checkAccuracy(t *testing.T, s *DDSketch, data []float64, relativeAccuracy f
 	}
 }
 
-// --- Distribution helpers ---
-
 func uniformSamples(n int, lo, hi float64) []float64 {
 	data := make([]float64, n)
 	for i := range data {
@@ -64,8 +62,6 @@ func uniformSamples(n int, lo, hi float64) []float64 {
 	return data
 }
 
-// normalPositive generates samples from a normal distribution shifted to be
-// strictly positive: N(mean, stddev) + offset.
 func normalPositiveSamples(n int, mean, stddev float64) []float64 {
 	data := make([]float64, n)
 	for i := range data {
@@ -74,8 +70,6 @@ func normalPositiveSamples(n int, mean, stddev float64) []float64 {
 	return data
 }
 
-// lognormalSamples generates samples from LogNormal(mu, sigma).
-// All values are strictly positive and the distribution is heavy-tailed.
 func lognormalSamples(n int, mu, sigma float64) []float64 {
 	data := make([]float64, n)
 	for i := range data {
@@ -83,8 +77,6 @@ func lognormalSamples(n int, mu, sigma float64) []float64 {
 	}
 	return data
 }
-
-// --- Correctness tests ---
 
 func TestQuantileAccuracy_Uniform(t *testing.T) {
 	const (
@@ -103,8 +95,6 @@ func TestQuantileAccuracy_Uniform(t *testing.T) {
 }
 
 func TestQuantileAccuracy_Normal(t *testing.T) {
-	// Normal distribution centered at 500ms, stddev 100ms.
-	// Adding a floor ensures all values are positive.
 	const (
 		n                = 10_000
 		relativeAccuracy = 0.01
@@ -126,8 +116,6 @@ func TestQuantileAccuracy_Normal(t *testing.T) {
 }
 
 func TestQuantileAccuracy_Lognormal(t *testing.T) {
-	// LogNormal(0, 1): median ≈ 1, mean ≈ 1.65, p99 ≈ 10.2.
-	// Heavy tail makes this the most demanding test for tail accuracy.
 	const (
 		n                = 10_000
 		relativeAccuracy = 0.01
@@ -141,7 +129,6 @@ func TestQuantileAccuracy_Lognormal(t *testing.T) {
 }
 
 func TestQuantileAccuracy_NegativeValues(t *testing.T) {
-	// All negative values (e.g., temperature deviations below zero).
 	const (
 		n                = 10_000
 		relativeAccuracy = 0.01
@@ -159,7 +146,6 @@ func TestQuantileAccuracy_NegativeValues(t *testing.T) {
 }
 
 func TestQuantileAccuracy_MixedSigns(t *testing.T) {
-	// Mix of negative, zero, and positive values.
 	const (
 		n                = 10_000
 		relativeAccuracy = 0.01
@@ -174,8 +160,6 @@ func TestQuantileAccuracy_MixedSigns(t *testing.T) {
 	}
 	checkAccuracy(t, s, data, relativeAccuracy)
 }
-
-// --- Boundary / edge-case tests ---
 
 func TestQuantile_Empty(t *testing.T) {
 	s := NewDDSketch(0.01)
@@ -221,11 +205,7 @@ func TestQuantile_IgnoresNaNInf(t *testing.T) {
 	}
 }
 
-// --- Merge tests ---
-
 func TestMerge_SameAsUnified(t *testing.T) {
-	// Split 10k lognormal samples across two sketches. After merging, every
-	// quantile should match a single sketch built from all samples.
 	const (
 		n                = 10_000
 		relativeAccuracy = 0.01
@@ -253,8 +233,6 @@ func TestMerge_SameAsUnified(t *testing.T) {
 	for _, q := range []float64{0.5, 0.9, 0.95, 0.99, 0.999} {
 		merged := sA.Quantile(q)
 		single := unified.Quantile(q)
-		// Both estimates are within ±α of the true value, so they should
-		// agree within 2α of each other (triangle inequality).
 		if single == 0 {
 			continue
 		}
@@ -274,7 +252,6 @@ func TestMerge_WithEmpty(t *testing.T) {
 	}
 	empty := NewDDSketch(0.01)
 
-	// Merge empty into s: s must be unchanged.
 	before := s.Quantile(0.99)
 	s.Merge(empty)
 	after := s.Quantile(0.99)
@@ -282,7 +259,6 @@ func TestMerge_WithEmpty(t *testing.T) {
 		t.Errorf("merge with empty changed p99: %v → %v", before, after)
 	}
 
-	// Merge s into empty: empty must equal s.
 	empty.Merge(s)
 	if empty.Count() != s.Count() {
 		t.Errorf("empty after merge Count()=%d, want %d", empty.Count(), s.Count())
@@ -306,14 +282,11 @@ func TestMerge_NegativeAndPositive(t *testing.T) {
 	if neg.Count() != all.Count() {
 		t.Fatalf("merged Count()=%d, want %d", neg.Count(), all.Count())
 	}
-	// p50 of symmetric ±[1..1000] should be near 0.
 	p50 := neg.Quantile(0.5)
 	if math.Abs(p50) > 2 { // within a couple of units
 		t.Errorf("p50 of symmetric ±[1..1000] = %v, expected near 0", p50)
 	}
 }
-
-// --- Reset tests ---
 
 func TestReset(t *testing.T) {
 	s := NewDDSketch(0.01)
@@ -363,8 +336,6 @@ func TestReset_ThenReuse(t *testing.T) {
 	checkAccuracy(t, s, data2, 0.01)
 }
 
-// --- Constructor validation ---
-
 func TestNewDDSketch_PanicOnInvalidAccuracy(t *testing.T) {
 	for _, bad := range []float64{0, -0.1, 1.0, 1.5} {
 		func() {
@@ -378,13 +349,10 @@ func TestNewDDSketch_PanicOnInvalidAccuracy(t *testing.T) {
 	}
 }
 
-// --- Benchmarks ---
-
 func BenchmarkAdd(b *testing.B) {
 	s := NewDDSketch(0.01)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		// Vary values over a wide range to exercise the bucket map.
 		s.Add(float64(i%10_000)*0.01 + 1)
 	}
 }

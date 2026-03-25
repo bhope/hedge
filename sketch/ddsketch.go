@@ -38,7 +38,6 @@ func (m *LogMapping) index(x float64) int {
 // Returns γ^(index−0.5), the geometric midpoint of the bucket boundaries
 // [γ^(index−1), γ^index].
 func (m *LogMapping) value(index int) float64 {
-	// exp((index − 0.5) * ln(γ)) = γ^(index − 0.5)
 	return math.Exp((float64(index) - 0.5) / m.multiplier)
 }
 
@@ -80,11 +79,11 @@ func (s *Store) reset() {
 //	|estimate − trueValue| / |trueValue| ≤ relativeAccuracy
 type DDSketch struct {
 	mapping   LogMapping
-	positive  *Store   // buckets for positive values
-	negative  *Store   // buckets for |negative values|
-	zeroCount float64  // count of zero values
-	count     int64    // total values added
-	min, max  float64  // exact bounds
+	positive  *Store
+	negative  *Store
+	zeroCount float64
+	count     int64
+	min, max  float64
 }
 
 // NewDDSketch creates a sketch with the given relative accuracy.
@@ -159,7 +158,6 @@ func (s *DDSketch) Quantile(q float64) float64 {
 		rank -= s.negative.count
 	}
 
-	// Zero values.
 	if s.zeroCount > 0 {
 		rank -= s.zeroCount
 		if rank <= 0 {
@@ -200,7 +198,6 @@ func (s *DDSketch) Merge(other *DDSketch) {
 	}
 }
 
-// Count returns the total number of values recorded.
 func (s *DDSketch) Count() int64 {
 	return s.count
 }
