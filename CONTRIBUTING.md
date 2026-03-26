@@ -22,12 +22,6 @@ End-to-end simulation (50k requests, four configurations):
 cd benchmark/simulate && go run .
 ```
 
-## Generating the evaluation chart
-
-```
-cd benchmark/chart && go run .
-```
-
 ## Code style
 
 All submissions must pass:
