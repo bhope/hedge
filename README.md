@@ -2,7 +2,7 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/bhope/hedge)](https://goreportcard.com/report/github.com/bhope/hedge) [![Go Reference](https://pkg.go.dev/badge/github.com/bhope/hedge.svg)](https://pkg.go.dev/github.com/bhope/hedge) ![Coverage](https://img.shields.io/badge/coverage-83%25-brightgreen) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-hedge is a Go library that reduces tail latency in fan-out architectures using adaptive hedged requests. It learns your service's latency distribution in real-time using DDSketch and fires backup requests only when the primary is genuinely slow — matching hand-tuned static thresholds with zero configuration. A token bucket budget prevents load amplification during outages.
+hedge is a Go library that reduces tail latency in fan-out architectures using adaptive hedged requests. It learns your service's latency distribution in real-time using DDSketch and fires backup requests only when the primary is genuinely slow - matching hand-tuned static thresholds with zero configuration. A token bucket budget prevents load amplification during outages.
 
 ---
 
@@ -24,13 +24,13 @@ hedge is a Go library that reduces tail latency in fan-out architectures using a
 
 ## Introduction
 
-In fan-out architectures, a single user request fans out to dozens or hundreds of downstream services. Even when each service has only 1% slow responses, the probability that at least one backend is slow compounds dramatically — with 100 services, 63% of top-level requests will be delayed by at least one straggler. [Dean & Barroso (2013)](https://research.google/pubs/the-tail-at-scale/) identified hedged requests as the most effective mitigation: send a duplicate request to another server after a brief delay, and use whichever responds first.
+In fan-out architectures, a single user request fans out to dozens or hundreds of downstream services. Even when each service has only 1% slow responses, the probability that at least one backend is slow compounds dramatically - with 100 services, 63% of top-level requests will be delayed by at least one straggler. [Dean & Barroso (2013)](https://research.google/pubs/the-tail-at-scale/) identified hedged requests as the most effective mitigation: send a duplicate request to another server after a brief delay, and use whichever responds first.
 
-hedge implements this with three components. A per-host [DDSketch](https://arxiv.org/abs/2004.08604) (Masson et al., VLDB 2019) tracks the latency distribution in real time with relative-error guarantees and constant memory, automatically adapting to load changes and deployments. When a request exceeds the estimated p90 latency, a backup is fired to the same target; whichever responds first wins and the loser is cancelled. A token bucket budget caps the hedge rate at a configurable percentage of total traffic, so that during genuine outages — when every request is slow — hedging stops before it doubles backend load.
+hedge implements this with three components. A per-host [DDSketch](https://arxiv.org/abs/2004.08604) (Masson et al., VLDB 2019) tracks the latency distribution in real time with relative-error guarantees and constant memory, automatically adapting to load changes and deployments. When a request exceeds the estimated p90 latency, a backup is fired to the same target; whichever responds first wins and the loser is cancelled. A token bucket budget caps the hedge rate at a configurable percentage of total traffic, so that during genuine outages - when every request is slow - hedging stops before it doubles backend load.
 
 **Features**
 
-- Zero configuration — learns latency per target host automatically
+- Zero configuration - learns latency per target host automatically
 - Drop-in `http.RoundTripper` and gRPC `UnaryClientInterceptor`
 - Adaptive thresholds via DDSketch with relative-error guarantees
 - Token bucket budget prevents load amplification during outages
@@ -66,7 +66,7 @@ go get github.com/bhope/hedge
 
 ## Quick Start
 
-**Zero configuration** — the transport learns latency automatically:
+**Zero configuration** - the transport learns latency automatically:
 
 ```go
 import "github.com/bhope/hedge"
@@ -77,7 +77,7 @@ client := &http.Client{
 resp, err := client.Get("https://api.example.com/data")
 ```
 
-**Tuned** — with explicit options and observability:
+**Tuned** - with explicit options and observability:
 
 ```go
 var stats *hedge.Stats
@@ -141,17 +141,17 @@ All options from the HTTP transport are supported. Per-target latency tracking u
 
 ### Adaptive Hedging
 
-When a request exceeds the estimated p90 latency, a backup request is fired to the same target using a child context derived from the caller's context. Whichever response arrives first is returned to the caller; the other is cancelled and its response body drained to release the connection back to the pool. If the primary wins, it was just slow but not a straggler — no overhead is incurred.
+When a request exceeds the estimated p90 latency, a backup request is fired to the same target using a child context derived from the caller's context. Whichever response arrives first is returned to the caller; the other is cancelled and its response body drained to release the connection back to the pool. If the primary wins, it was just slow but not a straggler - no overhead is incurred.
 
 ### Hedging Budget
 
-A token bucket limits hedge rate to a configurable percentage of total traffic (default 10%). The bucket refills at `estimatedRPS × budgetPercent / 100` tokens per second. When the bucket is empty, the request waits for the primary without firing a hedge. During genuine outages — when every request is slow and the bucket drains — hedging stops automatically, preventing the load-doubling spiral that would worsen the outage.
+A token bucket limits hedge rate to a configurable percentage of total traffic (default 10%). The bucket refills at `estimatedRPS × budgetPercent / 100` tokens per second. When the bucket is empty, the request waits for the primary without firing a hedge. During genuine outages - when every request is slow and the bucket drains - hedging stops automatically, preventing the load-doubling spiral that would worsen the outage.
 
 ---
 
 ## Why Not a Static Threshold?
 
-A static 10ms threshold looks great in benchmarks with fixed distributions. In production, latency shifts with load, deployments, GC pauses, and time of day — a threshold that is perfect at 3am causes 90%+ hedge rate at peak traffic. You would need to continuously monitor per-service latency and reconfigure thresholds as conditions change across every target your client talks to. Adaptive tracking handles this automatically: the sketch updates on every request, and the hedge threshold follows the actual distribution wherever it goes.
+A static 10ms threshold looks great in benchmarks with fixed distributions. In production, latency shifts with load, deployments, GC pauses, and time of day - a threshold that is perfect at 3am causes 90%+ hedge rate at peak traffic. You would need to continuously monitor per-service latency and reconfigure thresholds as conditions change across every target your client talks to. Adaptive tracking handles this automatically: the sketch updates on every request, and the hedge threshold follows the actual distribution wherever it goes.
 
 ---
 
