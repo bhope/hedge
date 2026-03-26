@@ -23,10 +23,10 @@ type result struct {
 }
 
 type hedgedTransport struct {
-	base    http.RoundTripper
-	cfg     config
-	stats   *Stats
-	budget  *budget.TokenBucket
+	base     http.RoundTripper
+	cfg      config
+	stats    *Stats
+	budget   *budget.TokenBucket
 	sketches sync.Map // host -> *sketch.WindowedSketch
 	counters sync.Map // host -> *atomic.Int64
 }

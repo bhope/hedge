@@ -87,4 +87,3 @@ func BenchmarkTokenBucketTryAcquire(b *testing.B) {
 		}
 	})
 }
-

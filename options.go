@@ -18,7 +18,7 @@ func defaults() config {
 	return config{
 		percentile:     0.90,
 		maxHedges:      1,
-		budgetPercent:  5.0,
+		budgetPercent:  10.0,
 		budgetRPS:      100,
 		minDelay:       1 * time.Millisecond,
 		warmupRequests: 20,
