@@ -106,12 +106,12 @@ fmt.Printf("hedged=%d total=%d budget_exhausted=%d\n",
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `WithPercentile(q)` | `float64` | `0.90` | Quantile of the latency distribution used as the hedge trigger threshold |
-| `WithMaxHedges(n)` | `int` | `1` | Maximum number of in-flight hedge requests per call |
-| `WithBudgetPercent(p)` | `float64` | `10.0` | Max hedge rate as a percentage of estimated total traffic |
-| `WithEstimatedRPS(r)` | `float64` | `100` | Expected requests per second; scales the token bucket capacity |
-| `WithMinDelay(d)` | `time.Duration` | `1ms` | Floor on the hedge delay; prevents hedging on sub-millisecond latencies |
-| `WithStats(s)` | `**Stats` | `nil` | Pointer to receive the live `Stats` struct for observability |
+| WithPercentile(q) | float64 | 0.90 | Quantile of the latency distribution used as the hedge trigger threshold |
+| WithMaxHedges(n) | int | 1 | Maximum number of in-flight hedge requests per call |
+| WithBudgetPercent(p) | float64 | 10.0 | Max hedge rate as a percentage of estimated total traffic |
+| WithEstimatedRPS(r) | float64 | 100 | Expected requests per second; scales the token bucket capacity |
+| WithMinDelay(d) | time.Duration | 1ms | Floor on the hedge delay; prevents hedging on sub-millisecond latencies |
+| WithStats(s) | **Stats | nil | Pointer to receive the live `Stats` struct for observability |
 
 ---
 
