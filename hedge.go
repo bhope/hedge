@@ -3,6 +3,7 @@ package hedge
 import (
 	"context"
 	"io"
+	"math"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -43,7 +44,7 @@ func New(transport http.RoundTripper, opts ...Option) http.RoundTripper {
 		base:   transport,
 		cfg:    cfg,
 		stats:  s,
-		budget: budget.NewTokenBucket(cfg.budgetPercent, 100),
+		budget: budget.NewTokenBucket(cfg.budgetPercent, cfg.budgetRPS),
 	}
 }
 
@@ -190,4 +191,24 @@ func drainLoser(ch <-chan result) {
 	}
 	io.Copy(io.Discard, io.LimitReader(res.resp.Body, drainLimit))
 	res.resp.Body.Close()
+}
+
+// LatencyEstimate returns the current hedge-delay threshold the transport
+// would use for the given host and quantile. Returns 0 if rt was not
+// created by New.
+func LatencyEstimate(rt http.RoundTripper, host string, q float64) time.Duration {
+	ht, ok := rt.(*hedgedTransport)
+	if !ok {
+		return 0
+	}
+	sk := ht.sketchFor(host)
+	est := sk.Quantile(q)
+	if math.IsNaN(est) || est <= 0 {
+		return ht.cfg.warmupDelay
+	}
+	d := time.Duration(est)
+	if d < ht.cfg.minDelay {
+		return ht.cfg.minDelay
+	}
+	return d
 }

@@ -3,21 +3,23 @@ package hedge
 import "time"
 
 type config struct {
-	percentile      float64
-	maxHedges       int
-	budgetPercent   float64
-	minDelay        time.Duration
-	warmupRequests  int
-	warmupDelay     time.Duration
-	windowDuration  time.Duration
-	stats           **Stats
+	percentile     float64
+	maxHedges      int
+	budgetPercent  float64
+	budgetRPS      float64
+	minDelay       time.Duration
+	warmupRequests int
+	warmupDelay    time.Duration
+	windowDuration time.Duration
+	stats          **Stats
 }
 
 func defaults() config {
 	return config{
-		percentile:     0.95,
+		percentile:     0.90,
 		maxHedges:      1,
 		budgetPercent:  5.0,
+		budgetRPS:      100,
 		minDelay:       1 * time.Millisecond,
 		warmupRequests: 20,
 		warmupDelay:    10 * time.Millisecond,
@@ -45,4 +47,8 @@ func WithMinDelay(d time.Duration) Option {
 
 func WithStats(s **Stats) Option {
 	return func(c *config) { c.stats = s }
+}
+
+func WithEstimatedRPS(rps float64) Option {
+	return func(c *config) { c.budgetRPS = rps }
 }

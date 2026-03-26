@@ -39,7 +39,7 @@ func NewUnaryClientInterceptor(opts ...Option) grpc.UnaryClientInterceptor {
 	gi := &grpcInterceptor{
 		cfg:    cfg,
 		stats:  s,
-		budget: budget.NewTokenBucket(cfg.budgetPercent, 100),
+		budget: budget.NewTokenBucket(cfg.budgetPercent, cfg.budgetRPS),
 	}
 	return gi.intercept
 }
