@@ -27,6 +27,12 @@ type grpcResult struct {
 	primary bool
 }
 
+type GRPCRequestData struct {
+	Hostname string
+	Method   string
+	Request  any
+}
+
 func NewUnaryClientInterceptor(opts ...Option) grpc.UnaryClientInterceptor {
 	cfg := defaults()
 	for _, o := range opts {
@@ -44,13 +50,13 @@ func NewUnaryClientInterceptor(opts ...Option) grpc.UnaryClientInterceptor {
 	return gi.intercept
 }
 
-func (gi *grpcInterceptor) sketchFor(target string) *sketch.WindowedSketch {
-	v, ok := gi.sketches.Load(target)
+func (gi *grpcInterceptor) sketchFor(key string) *sketch.WindowedSketch {
+	v, ok := gi.sketches.Load(key)
 	if ok {
 		return v.(*sketch.WindowedSketch)
 	}
 	s := sketch.NewWindowedSketch(0.01, gi.cfg.windowDuration)
-	actual, loaded := gi.sketches.LoadOrStore(target, s)
+	actual, loaded := gi.sketches.LoadOrStore(key, s)
 	if loaded {
 		s.Stop()
 		return actual.(*sketch.WindowedSketch)
@@ -80,7 +86,11 @@ func (gi *grpcInterceptor) intercept(ctx context.Context, method string, req, re
 	gi.stats.TotalRequests.Add(1)
 
 	target := cc.Target()
-	sk := gi.sketchFor(target)
+	sk := gi.sketchFor(gi.cfg.grpcKeyFunc(GRPCRequestData{
+		Hostname: target,
+		Method:   method,
+		Request:  req,
+	}))
 	counter := gi.counterFor(target)
 	n := counter.Add(1)
 

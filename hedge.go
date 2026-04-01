@@ -48,13 +48,13 @@ func New(transport http.RoundTripper, opts ...Option) http.RoundTripper {
 	}
 }
 
-func (t *hedgedTransport) sketchFor(host string) *sketch.WindowedSketch {
-	v, ok := t.sketches.Load(host)
+func (t *hedgedTransport) sketchFor(key string) *sketch.WindowedSketch {
+	v, ok := t.sketches.Load(key)
 	if ok {
 		return v.(*sketch.WindowedSketch)
 	}
 	s := sketch.NewWindowedSketch(0.01, t.cfg.windowDuration)
-	actual, loaded := t.sketches.LoadOrStore(host, s)
+	actual, loaded := t.sketches.LoadOrStore(key, s)
 	if loaded {
 		s.Stop()
 		return actual.(*sketch.WindowedSketch)
@@ -76,7 +76,7 @@ func (t *hedgedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	t.stats.TotalRequests.Add(1)
 
 	host := req.URL.Host
-	sk := t.sketchFor(host)
+	sk := t.sketchFor(t.cfg.httpKeyFunc(req))
 	counter := t.counterFor(host)
 	n := counter.Add(1)
 
@@ -189,19 +189,19 @@ func drainLoser(ch <-chan result) {
 	if !ok || res.resp == nil {
 		return
 	}
-	io.Copy(io.Discard, io.LimitReader(res.resp.Body, drainLimit))
-	res.resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(res.resp.Body, drainLimit))
+	_ = res.resp.Body.Close()
 }
 
 // LatencyEstimate returns the current hedge-delay threshold the transport
-// would use for the given host and quantile. Returns 0 if rt was not
-// created by New.
-func LatencyEstimate(rt http.RoundTripper, host string, q float64) time.Duration {
+// would use for the given key (generally hostname) and quantile. Returns 0
+// if rt was not created by New.
+func LatencyEstimate(rt http.RoundTripper, key string, q float64) time.Duration {
 	ht, ok := rt.(*hedgedTransport)
 	if !ok {
 		return 0
 	}
-	sk := ht.sketchFor(host)
+	sk := ht.sketchFor(key)
 	est := sk.Quantile(q)
 	if math.IsNaN(est) || est <= 0 {
 		return ht.cfg.warmupDelay

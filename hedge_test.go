@@ -2,6 +2,7 @@ package hedge
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -40,12 +41,12 @@ func newTransport(t *testing.T, opts ...Option) (http.RoundTripper, *Stats) {
 func warmup(t *testing.T, tr http.RoundTripper, url string, n int) {
 	t.Helper()
 	for i := 0; i < n; i++ {
-		req, _ := http.NewRequest("GET", url, nil)
+		req := httptest.NewRequest("GET", url, nil)
 		resp, err := tr.RoundTrip(req)
 		if err != nil {
 			t.Fatalf("warmup request %d failed: %v", i, err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 }
 
@@ -61,12 +62,12 @@ func TestNoHedgeWhenFast(t *testing.T) {
 	)
 	warmup(t, tr, srv.URL, 25)
 
-	req, _ := http.NewRequest("GET", srv.URL, nil)
+	req := httptest.NewRequest("GET", srv.URL, nil)
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if n := stats.HedgedRequests.Load(); n != 0 {
 		t.Errorf("HedgedRequests = %d, want 0", n)
@@ -89,12 +90,12 @@ func TestHedgeWhenSlow(t *testing.T) {
 	// now slow
 	delay.Store(int64(200 * time.Millisecond))
 
-	req, _ := http.NewRequest("GET", srv.URL, nil)
+	req := httptest.NewRequest("GET", srv.URL, nil)
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if n := stats.HedgedRequests.Load(); n == 0 {
 		t.Error("expected HedgedRequests > 0")
@@ -133,12 +134,12 @@ func TestHedgeWins(t *testing.T) {
 	)
 	warmup(t, tr, srv.URL, 25)
 
-	req, _ := http.NewRequest("GET", srv.URL, nil)
+	req := httptest.NewRequest("GET", srv.URL, nil)
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if got := resp.Header.Get("X-Responder"); got != "hedge" {
 		t.Errorf("X-Responder = %q, want hedge", got)
@@ -160,12 +161,12 @@ func TestPrimaryWins(t *testing.T) {
 	)
 	warmup(t, tr, srv.URL, 25)
 
-	req, _ := http.NewRequest("GET", srv.URL, nil)
+	req := httptest.NewRequest("GET", srv.URL, nil)
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if n := stats.HedgedRequests.Load(); n != 0 {
 		t.Errorf("HedgedRequests = %d, want 0", n)
@@ -196,10 +197,10 @@ func TestBudgetExhaustion(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			req, _ := http.NewRequest("GET", srv.URL, nil)
+			req := httptest.NewRequest("GET", srv.URL, nil)
 			resp, err := tr.RoundTrip(req)
 			if err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 		}()
 	}
@@ -212,13 +213,6 @@ func TestBudgetExhaustion(t *testing.T) {
 		t.Errorf("HedgedRequests = %d, want < %d (budget should have limited hedges)", hedged, n)
 	}
 }
-
-// bodyReader wraps a string as an io.Reader without triggering http.NewRequest's
-// automatic GetBody injection (which only fires for *bytes.Buffer, *bytes.Reader,
-// and *strings.Reader).
-type bodyReader struct{ r *strings.Reader }
-
-func (b *bodyReader) Read(p []byte) (int, error) { return b.r.Read(p) }
 
 func TestNoHedgeForPOST(t *testing.T) {
 	var delay atomic.Int64
@@ -233,18 +227,14 @@ func TestNoHedgeForPOST(t *testing.T) {
 	)
 	warmup(t, tr, srv.URL, 25)
 
-	req, _ := http.NewRequest("POST", srv.URL, &bodyReader{strings.NewReader("payload")})
-	// GetBody is nil — http.NewRequest won't set it for an unknown io.Reader type
-	if req.GetBody != nil {
-		t.Fatal("test setup error: GetBody should be nil for unknown reader type")
-	}
+	req := httptest.NewRequest("POST", srv.URL, strings.NewReader("payload"))
 
 	before := stats.HedgedRequests.Load()
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if delta := stats.HedgedRequests.Load() - before; delta != 0 {
 		t.Errorf("HedgedRequests delta = %d, want 0 for POST without GetBody", delta)
@@ -265,7 +255,7 @@ func TestHedgeWithGetBody(t *testing.T) {
 	warmup(t, tr, srv.URL, 25)
 
 	payload := "payload"
-	req, _ := http.NewRequest("POST", srv.URL, strings.NewReader(payload))
+	req := httptest.NewRequest("POST", srv.URL, strings.NewReader(payload))
 	req.GetBody = func() (io.ReadCloser, error) {
 		return io.NopCloser(strings.NewReader(payload)), nil
 	}
@@ -274,7 +264,7 @@ func TestHedgeWithGetBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if n := stats.HedgedRequests.Load(); n == 0 {
 		t.Error("expected HedgedRequests > 0 for POST with GetBody")
@@ -300,13 +290,13 @@ func TestContextCancellation(t *testing.T) {
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL, nil)
+	req := httptest.NewRequestWithContext(ctx, "GET", srv.URL, nil)
 
 	done := make(chan error, 1)
 	go func() {
 		resp, err := tr.RoundTrip(req)
 		if err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 		done <- err
 	}()
@@ -335,12 +325,12 @@ func TestWarmupPhase(t *testing.T) {
 		WithMinDelay(time.Millisecond),
 	)
 
-	req, _ := http.NewRequest("GET", srv.URL, nil)
+	req := httptest.NewRequest("GET", srv.URL, nil)
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if n := stats.WarmupRequests.Load(); n == 0 {
 		t.Error("expected WarmupRequests > 0 during warmup phase")
@@ -348,6 +338,97 @@ func TestWarmupPhase(t *testing.T) {
 	// warmupDelay default is 10ms, backend is 5ms → primary returns before warmup timer
 	if n := stats.HedgedRequests.Load(); n != 0 {
 		t.Errorf("HedgedRequests = %d during warmup, want 0", n)
+	}
+}
+
+func TestHedgePerKey(t *testing.T) {
+	fooDelay := 5 * time.Millisecond
+	barDelay := 20 * time.Millisecond
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /foo", func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(fooDelay):
+			// continue to respond
+		case <-r.Context().Done():
+			return
+		}
+		w.Header().Set("X-Responder", "foo")
+	})
+	mux.HandleFunc("GET /bar", func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(barDelay):
+			// continue to respond
+		case <-r.Context().Done():
+			return
+		}
+		w.Header().Set("X-Responder", "bar")
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	tr, stats := newTransport(t,
+		WithBudgetPercent(100),
+		WithMinDelay(time.Millisecond),
+		WithHTTPKeyFunc(func(r *http.Request) string {
+			return fmt.Sprintf("%s %s/%s", r.Method, r.URL.Host, r.URL.Path)
+		}),
+	)
+
+	fooURL := fmt.Sprintf("%s/foo", srv.URL)
+	barURL := fmt.Sprintf("%s/bar", srv.URL)
+	warmup(t, tr, fooURL, 25)
+	warmup(t, tr, barURL, 25)
+
+	*stats = Stats{} // reset stats after warmup
+
+	req := httptest.NewRequest("GET", fooURL, nil)
+	resp, err := tr.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+
+	if n := stats.HedgedRequests.Load(); n != 0 {
+		t.Errorf("HedgedRequests = %d for fast /foo, want 0", n)
+	}
+
+	req = httptest.NewRequest("GET", barURL, nil)
+	resp, err = tr.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+
+	if n := stats.HedgedRequests.Load(); n != 0 {
+		t.Errorf("HedgedRequests = %d for slow /bar, want 0", n)
+	}
+
+	// swap foo and bar response delays
+	fooDelay, barDelay = barDelay, fooDelay
+
+	// bar requests should not hedge because they got faster
+	req = httptest.NewRequest("GET", barURL, nil)
+	resp, err = tr.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+
+	if n := stats.HedgedRequests.Load(); n != 0 {
+		t.Errorf("HedgedRequests = %d for sped up /bar, want 0", n)
+	}
+
+	// foo requests should hedge because they are slower than before
+	req = httptest.NewRequest("GET", fooURL, nil)
+	resp, err = tr.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+
+	if n := stats.HedgedRequests.Load(); n == 0 {
+		t.Error("expected HedgedRequests > 0 for slowed down /foo")
 	}
 }
 
@@ -370,10 +451,10 @@ func TestConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			req, _ := http.NewRequest("GET", srv.URL, nil)
+			req := httptest.NewRequest("GET", srv.URL, nil)
 			resp, err := tr.RoundTrip(req)
 			if err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 		}()
 	}
@@ -398,12 +479,12 @@ func TestStats(t *testing.T) {
 	)
 	warmup(t, tr, srv.URL, 25)
 
-	req, _ := http.NewRequest("GET", srv.URL, nil)
+	req := httptest.NewRequest("GET", srv.URL, nil)
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	snap := stats.Snapshot()
 	if snap.TotalRequests == 0 {
@@ -423,12 +504,12 @@ func TestWithMaxHedges(t *testing.T) {
 	tr, _ := newTransport(t, WithMaxHedges(2))
 	warmup(t, tr, srv.URL, 5)
 	// just verify it builds and runs without panic
-	req, _ := http.NewRequest("GET", srv.URL, nil)
+	req := httptest.NewRequest("GET", srv.URL, nil)
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 func TestHedgeAllowedForNoBody(t *testing.T) {
@@ -448,13 +529,13 @@ func TestHedgeAllowedForNoBody(t *testing.T) {
 	delay.Store(int64(200 * time.Millisecond))
 
 	// http.NoBody carries no content, so hedging is safe (same as nil body).
-	req, _ := http.NewRequest("POST", srv.URL, http.NoBody)
+	req := httptest.NewRequest("POST", srv.URL, http.NoBody)
 	before := stats.HedgedRequests.Load()
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if delta := stats.HedgedRequests.Load() - before; delta == 0 {
 		t.Error("expected hedge for POST with http.NoBody (no body to re-send)")
@@ -480,7 +561,7 @@ func TestHedgeWithGetBodyReliable(t *testing.T) {
 	delay.Store(int64(200 * time.Millisecond))
 
 	payload := "payload"
-	req, _ := http.NewRequest("POST", srv.URL, strings.NewReader(payload))
+	req := httptest.NewRequest("POST", srv.URL, strings.NewReader(payload))
 	req.GetBody = func() (io.ReadCloser, error) {
 		return io.NopCloser(strings.NewReader(payload)), nil
 	}
@@ -490,7 +571,7 @@ func TestHedgeWithGetBodyReliable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if delta := stats.HedgedRequests.Load() - before; delta == 0 {
 		t.Error("expected HedgedRequests > 0 for POST with GetBody on slow backend")
@@ -511,7 +592,7 @@ func TestDrainLoserBody(t *testing.T) {
 			}
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("response body"))
+		_, _ = w.Write([]byte("response body"))
 	}))
 	defer srv.Close()
 
@@ -522,12 +603,12 @@ func TestDrainLoserBody(t *testing.T) {
 	)
 	warmup(t, tr, srv.URL, 25)
 
-	req, _ := http.NewRequest("GET", srv.URL, nil)
+	req := httptest.NewRequest("GET", srv.URL, nil)
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if n := stats.HedgeWins.Load(); n == 0 {
 		t.Error("expected HedgeWins > 0")
