@@ -2,6 +2,7 @@ package hedge
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ func newTestConn(t *testing.T) *grpc.ClientConn {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { cc.Close() })
+	t.Cleanup(func() { _ = cc.Close() })
 	return cc
 }
 
@@ -81,6 +82,85 @@ func TestGRPCHedgeWhenSlow(t *testing.T) {
 	}
 	if n := stats.HedgedRequests.Load(); n == 0 {
 		t.Error("expected HedgedRequests > 0")
+	}
+}
+
+func TestGRPCHedgePerKey(t *testing.T) {
+	var stats *Stats
+	interceptor := NewUnaryClientInterceptor(
+		WithStats(&stats),
+		WithPercentile(0.5),
+		WithBudgetPercent(100),
+		WithMinDelay(10*time.Millisecond),
+		WithGRPCKeyFunc(func(d GRPCRequestData) string {
+			return fmt.Sprintf("%s/%s", d.Hostname, d.Method)
+		}),
+	)
+	cc := newTestConn(t)
+	fooDelay := 5 * time.Millisecond
+	barDelay := 20 * time.Millisecond
+	invoker := func(ctx context.Context, method string, _, _ interface{}, _ *grpc.ClientConn, _ ...grpc.CallOption) error {
+		var delay time.Duration
+
+		switch method {
+		case "/test.Svc/Foo":
+			delay = fooDelay
+		case "/test.Svc/Bar":
+			delay = barDelay
+		default:
+			return nil
+		}
+		select {
+		case <-time.After(delay):
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	// warm up both keys
+	for i := 0; i < 25; i++ {
+		if err := interceptor(context.Background(), "/test.Svc/Foo", &testMsg{}, &testMsg{}, cc, invoker); err != nil {
+			t.Fatalf("foo warmup %d: %v", i, err)
+		}
+		if err := interceptor(context.Background(), "/test.Svc/Bar", &testMsg{}, &testMsg{}, cc, invoker); err != nil {
+			t.Fatalf("bar warmup %d: %v", i, err)
+		}
+	}
+
+	*stats = Stats{} // reset stats after warmup
+
+	if err := interceptor(context.Background(), "/test.Svc/Foo", &testMsg{}, &testMsg{}, cc, invoker); err != nil {
+		t.Fatal(err)
+	}
+	if n := stats.HedgedRequests.Load(); n != 0 {
+		t.Errorf("HedgedRequests = %d for fast /test.Svc/Foo, want 0", n)
+	}
+
+	if err := interceptor(context.Background(), "/test.Svc/Bar", &testMsg{}, &testMsg{}, cc, invoker); err != nil {
+		t.Fatal(err)
+	}
+	if n := stats.HedgedRequests.Load(); n != 0 {
+		t.Errorf("HedgedRequests = %d for fast /test.Svc/Bar, want 0", n)
+	}
+
+	// swap foo and bar response delays
+	fooDelay, barDelay = barDelay, fooDelay
+
+	// bar requests should not hedge because they got faster
+	if err := interceptor(context.Background(), "/test.Svc/Bar", &testMsg{}, &testMsg{}, cc, invoker); err != nil {
+		t.Fatal(err)
+	}
+	if n := stats.HedgedRequests.Load(); n != 0 {
+		t.Errorf("HedgedRequests = %d for /test.Svc/Bar, want 0", n)
+	}
+
+	// foo requests should hedge because they are slower than before
+	if err := interceptor(context.Background(), "/test.Svc/Foo", &testMsg{}, &testMsg{}, cc, invoker); err != nil {
+		t.Fatal(err)
+	}
+	if n := stats.HedgedRequests.Load(); n == 0 {
+		t.Error("expected HedgedRequests > 0 for slowed down /test.Svc/Foo")
 	}
 }
 
