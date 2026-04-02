@@ -15,6 +15,14 @@ import (
 
 const drainLimit = 1 << 20 // 1MB
 
+var timerPool = sync.Pool{
+	New: func() any {
+		t := time.NewTimer(time.Hour)
+		t.Stop()
+		return t
+	},
+}
+
 type result struct {
 	resp    *http.Response
 	err     error
@@ -27,8 +35,9 @@ type hedgedTransport struct {
 	cfg      config
 	stats    *Stats
 	budget   *budget.TokenBucket
-	sketches sync.Map // host -> *sketch.WindowedSketch
-	counters sync.Map // host -> *atomic.Int64
+	mu       sync.RWMutex
+	sketches map[string]*sketch.WindowedSketch
+	counters map[string]*atomic.Int64
 }
 
 func New(transport http.RoundTripper, opts ...Option) http.RoundTripper {
@@ -41,35 +50,51 @@ func New(transport http.RoundTripper, opts ...Option) http.RoundTripper {
 		*cfg.stats = s
 	}
 	return &hedgedTransport{
-		base:   transport,
-		cfg:    cfg,
-		stats:  s,
-		budget: budget.NewTokenBucket(cfg.budgetPercent, cfg.budgetRPS),
+		base:     transport,
+		cfg:      cfg,
+		stats:    s,
+		budget:   budget.NewTokenBucket(cfg.budgetPercent, cfg.budgetRPS),
+		sketches: make(map[string]*sketch.WindowedSketch),
+		counters: make(map[string]*atomic.Int64),
 	}
 }
 
 func (t *hedgedTransport) sketchFor(host string) *sketch.WindowedSketch {
-	v, ok := t.sketches.Load(host)
+	t.mu.RLock()
+	s, ok := t.sketches[host]
+	t.mu.RUnlock()
 	if ok {
-		return v.(*sketch.WindowedSketch)
+		return s
 	}
-	s := sketch.NewWindowedSketch(0.01, t.cfg.windowDuration)
-	actual, loaded := t.sketches.LoadOrStore(host, s)
-	if loaded {
-		s.Stop()
-		return actual.(*sketch.WindowedSketch)
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if s, ok = t.sketches[host]; ok {
+		return s
 	}
+
+	s = sketch.NewWindowedSketch(0.01, t.cfg.windowDuration)
+	t.sketches[host] = s
 	return s
 }
 
 func (t *hedgedTransport) counterFor(host string) *atomic.Int64 {
-	v, ok := t.counters.Load(host)
+	t.mu.RLock()
+	c, ok := t.counters[host]
+	t.mu.RUnlock()
 	if ok {
-		return v.(*atomic.Int64)
+		return c
 	}
-	var c atomic.Int64
-	actual, _ := t.counters.LoadOrStore(host, &c)
-	return actual.(*atomic.Int64)
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if c, ok = t.counters[host]; ok {
+		return c
+	}
+
+	c = &atomic.Int64{}
+	t.counters[host] = c
+	return c
 }
 
 func (t *hedgedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -107,14 +132,22 @@ func (t *hedgedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		ch <- result{resp, err, time.Since(start), true}
 	}()
 
-	timer := time.NewTimer(hedgeDelay)
-	defer timer.Stop()
+	timer := timerPool.Get().(*time.Timer)
+	timer.Reset(hedgeDelay)
 
 	select {
 	case res := <-ch:
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		timerPool.Put(timer)
 		sk.Add(float64(res.elapsed))
 		return res.resp, res.err
 	case <-timer.C:
+		timerPool.Put(timer)
 	}
 
 	if !canHedge(req) {
