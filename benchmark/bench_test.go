@@ -12,6 +12,26 @@ import (
 	"github.com/bhope/hedge/sketch"
 )
 
+func BenchmarkRoundTripBaseline(b *testing.B) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	tr := http.DefaultTransport
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			req, _ := http.NewRequestWithContext(context.Background(), "GET", srv.URL, nil)
+			resp, err := tr.RoundTrip(req)
+			if err == nil {
+				resp.Body.Close()
+			}
+		}
+	})
+}
+
 func BenchmarkRoundTripNoHedge(b *testing.B) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

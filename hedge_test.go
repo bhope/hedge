@@ -535,3 +535,67 @@ func TestDrainLoserBody(t *testing.T) {
 	// give drainLoser goroutine time to finish
 	time.Sleep(600 * time.Millisecond)
 }
+
+// TestTTFTMeasurement verifies that the sketch records time-to-first-byte rather
+// than time-to-headers. The test server flushes HTTP headers immediately but
+// delays writing the first response byte by bodyDelay. After warmup (fast body),
+// we switch to a slow body and confirm that LatencyEstimate reflects the body
+// delay, not the near-zero header time.
+func TestTTFTMeasurement(t *testing.T) {
+	var bodyDelay atomic.Int64
+	bodyDelay.Store(int64(2 * time.Millisecond))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		d := time.Duration(bodyDelay.Load())
+		select {
+		case <-time.After(d):
+		case <-r.Context().Done():
+			return
+		}
+		w.Write([]byte("token"))
+	}))
+	defer srv.Close()
+
+	tr, _ := newTransport(t,
+		WithBudgetPercent(0), // disable hedging so we measure cleanly
+		WithMinDelay(time.Millisecond),
+		WithPercentile(0.9),
+	)
+
+	// Warmup: fast body (~2ms TTFT).
+	for i := 0; i < 25; i++ {
+		req, _ := http.NewRequest("GET", srv.URL, nil)
+		resp, err := tr.RoundTrip(req)
+		if err != nil {
+			t.Fatalf("warmup request %d failed: %v", i, err)
+		}
+		io.ReadAll(resp.Body) // must read body so ttftBody fires
+		resp.Body.Close()
+	}
+
+	fast := LatencyEstimate(tr, srv.URL[len("http://"):], 0.9)
+	if fast < time.Millisecond || fast > 50*time.Millisecond {
+		t.Errorf("p90 TTFT after fast warmup = %v, want roughly 2ms", fast)
+	}
+
+	// Switch to slow body (~80ms TTFT).
+	bodyDelay.Store(int64(80 * time.Millisecond))
+	for i := 0; i < 10; i++ {
+		req, _ := http.NewRequest("GET", srv.URL, nil)
+		resp, err := tr.RoundTrip(req)
+		if err != nil {
+			t.Fatalf("slow request %d failed: %v", i, err)
+		}
+		io.ReadAll(resp.Body)
+		resp.Body.Close()
+	}
+
+	slow := LatencyEstimate(tr, srv.URL[len("http://"):], 0.9)
+	if slow < 50*time.Millisecond {
+		t.Errorf("p90 TTFT after slow body = %v, want >= 50ms (sketch should reflect body delay, not header time)", slow)
+	}
+}
