@@ -54,7 +54,7 @@ import (
 // ── simulation constants ────────────────────────────────────────────────────
 
 const (
-	numRequests = 5_000
+	numRequests = 50_000
 	warmupReqs  = 200
 	concurrency = 20
 
