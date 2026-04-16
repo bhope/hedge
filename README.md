@@ -19,8 +19,6 @@ client := &http.Client{Transport: hedge.New(http.DefaultTransport)}
 resp, err := client.Get("https://api.example.com/data")
 ```
 
----
-
 ## Table of Contents
 
 - [Quick Start](#quick-start)
@@ -35,7 +33,6 @@ resp, err := client.Get("https://api.example.com/data")
 - [Contributing](#contributing)
 - [License](#license)
 
----
 
 ## Evaluation
 
@@ -54,7 +51,6 @@ Adaptive matches the best hand-tuned static threshold at p99 (17.0ms vs 17.4ms) 
 
 Reproduce: `cd benchmark/simulate && go run .`
 
----
 
 ## How it works
 
@@ -64,13 +60,11 @@ Reproduce: `cd benchmark/simulate && go run .`
 
 **3. Token bucket budget.** Hedges are rate-limited by a token bucket that refills at `estimatedRPS × budgetPercent / 100` tokens per second (defaults: 100 RPS, 10%). During genuine outages, when every request stalls and the p90 estimate collapses to the minimum delay, the bucket drains within seconds and hedging stops, preventing the load-doubling spiral that would deepen the incident.
 
----
 
 ## Why not a static threshold?
 
 A fixed 10ms threshold calibrated against today's traffic will be wrong tomorrow. Latency shifts with load, GC pauses, cold JVM instances after a deploy, and time of day. At off-peak, the real p90 might be 3ms, so a 10ms threshold never fires and provides no benefit. At peak, the real p90 might be 40ms, so a 10ms threshold hedges 90% of requests and doubles backend load. You would need per-service, per-environment thresholds updated continuously. The sketch updates on every completed request; the threshold is always current.
 
----
 
 ## Streaming / LLM inference
 
@@ -101,7 +95,6 @@ The miscalibrated transport halves p90 but doubles load and barely touches p99. 
 
 Reproduce: `cd benchmark/streaming && go run .`
 
----
 
 ## gRPC support
 
@@ -117,7 +110,6 @@ conn, err := grpc.NewClient(target,
 
 All options are supported. Per-target latency tracking uses `cc.Target()` as the host key.
 
----
 
 ## Configuration
 
@@ -130,7 +122,6 @@ All options are supported. Per-target latency tracking uses `cc.Target()` as the
 | `WithMinDelay(d)` | time.Duration | 1ms | Floor on the hedge delay |
 | `WithStats(s)` | `**Stats` | nil | Pointer to receive the live `Stats` struct |
 
----
 
 ## Observability
 
@@ -156,14 +147,12 @@ fmt.Printf("hedge_rate=%.2f\n", stats.HedgeRate())
 
 `Stats` fields are `atomic.Int64` and safe to read concurrently. `Snapshot()` takes a consistent point-in-time copy. `HedgeRate()` returns `HedgedRequests / TotalRequests`.
 
----
 
 ## References
 
 - Jeffrey Dean and Luiz André Barroso. ["The Tail at Scale."](https://research.google/pubs/the-tail-at-scale/) *Communications of the ACM*, 56(2):74–80, February 2013.
 - Charles Masson, Jee E. Rim, and Homin K. Lee. ["DDSketch: A Fast and Fully-Mergeable Quantile Sketch with Relative-Error Guarantees."](https://arxiv.org/abs/2004.08604) *Proceedings of the VLDB Endowment*, 12(12):2195–2205, 2019.
 
----
 
 ## Contributing
 
@@ -171,7 +160,6 @@ Contributions are welcome! Please open an issue to discuss your idea before subm
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 
----
 
 ## License
 
