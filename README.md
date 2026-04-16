@@ -1,6 +1,6 @@
 # hedge
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/bhope/hedge)](https://goreportcard.com/report/github.com/bhope/hedge) [![Go Reference](https://pkg.go.dev/badge/github.com/bhope/hedge.svg)](https://pkg.go.dev/github.com/bhope/hedge) ![Coverage](https://img.shields.io/badge/coverage-83%25-brightgreen) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/bhope/hedge)](https://goreportcard.com/report/github.com/bhope/hedge) [![Go Reference](https://pkg.go.dev/badge/github.com/bhope/hedge.svg)](https://pkg.go.dev/github.com/bhope/hedge) [![codecov](https://codecov.io/gh/bhope/hedge/branch/main/graph/badge.svg)](https://codecov.io/gh/bhope/hedge) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 In a fan-out architecture with 100 backends, 63% of your requests hit at least one straggler (1 − 0.99¹⁰⁰).
 
