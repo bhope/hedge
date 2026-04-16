@@ -7,6 +7,11 @@ import (
 	"testing"
 )
 
+// seededRand returns a deterministic RNG for reproducible tests.
+func seededRand() *rand.Rand {
+	return rand.New(rand.NewPCG(42, 0))
+}
+
 // exactQuantile computes the exact quantile from a dataset by sorting.
 // Uses the same ceil-rank convention as DDSketch.Quantile.
 func exactQuantile(data []float64, q float64) float64 {
@@ -55,25 +60,28 @@ func checkAccuracy(t *testing.T, s *DDSketch, data []float64, relativeAccuracy f
 }
 
 func uniformSamples(n int, lo, hi float64) []float64 {
+	rng := seededRand()
 	data := make([]float64, n)
 	for i := range data {
-		data[i] = lo + rand.Float64()*(hi-lo)
+		data[i] = lo + rng.Float64()*(hi-lo)
 	}
 	return data
 }
 
 func normalPositiveSamples(n int, mean, stddev float64) []float64 {
+	rng := seededRand()
 	data := make([]float64, n)
 	for i := range data {
-		data[i] = mean + rand.NormFloat64()*stddev
+		data[i] = mean + rng.NormFloat64()*stddev
 	}
 	return data
 }
 
 func lognormalSamples(n int, mu, sigma float64) []float64 {
+	rng := seededRand()
 	data := make([]float64, n)
 	for i := range data {
-		data[i] = math.Exp(mu + rand.NormFloat64()*sigma)
+		data[i] = math.Exp(mu + rng.NormFloat64()*sigma)
 	}
 	return data
 }
