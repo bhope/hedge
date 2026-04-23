@@ -142,10 +142,24 @@ fmt.Printf("total=%d hedged=%d hedge_wins=%d budget_exhausted=%d\n",
     snap.HedgeWins,
     snap.BudgetExhausted,
 )
-fmt.Printf("hedge_rate=%.2f\n", stats.HedgeRate())
+fmt.Printf("hedge_rate=%.2f\n", snap.HedgeRate())
 ```
 
-`Stats` fields are `atomic.Int64` and safe to read concurrently. `Snapshot()` takes a consistent point-in-time copy. `HedgeRate()` returns `HedgedRequests / TotalRequests`.
+`Stats` fields are `atomic.Int64` and safe to read concurrently. `Snapshot()` copies the current counters for reporting. `HedgeRate()` returns `HedgedRequests / TotalRequests`, and `StatsSnapshot.HedgeRate()` computes the same ratio from a copied snapshot.
+
+To expose the same counters on a Prometheus-style `/metrics` endpoint, mount `stats` directly as an HTTP handler:
+
+```go
+var stats *hedge.Stats
+
+client := &http.Client{
+    Transport: hedge.New(http.DefaultTransport,
+        hedge.WithStats(&stats),
+    ),
+}
+
+http.Handle("/metrics", stats)
+```
 
 
 ## References
