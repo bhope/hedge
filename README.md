@@ -2,7 +2,7 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/bhope/hedge)](https://goreportcard.com/report/github.com/bhope/hedge) [![Go Reference](https://pkg.go.dev/badge/github.com/bhope/hedge.svg)](https://pkg.go.dev/github.com/bhope/hedge) [![codecov](https://codecov.io/gh/bhope/hedge/branch/main/graph/badge.svg)](https://codecov.io/gh/bhope/hedge) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-In a fan-out architecture with 100 backends, 63% of your requests hit at least one straggler (1 − 0.99¹⁰⁰).
+In a fan-out architecture with 100 backends, 63% of your requests hit at least one straggler (1 - 0.99^100).
 
 hedge learns per-host latency distributions using DDSketch, fires a backup request when the primary exceeds its estimated p90, and caps hedge rate with a token bucket to prevent load amplification during outages. Result: p99 drops from 64ms to 17ms - a 74% reduction - with ~9% overhead. Zero configuration. Supports streaming workloads including LLM inference (measures time-to-first-token, not just headers).
 
@@ -36,7 +36,7 @@ resp, err := client.Get("https://api.example.com/data")
 
 ## Evaluation
 
-50,000 requests against a simulated backend with lognormal base latency (mean=5ms, σ=2ms) and 5% straggler probability (10× multiplier).
+50,000 requests against a simulated backend with lognormal base latency (mean=5ms, stddev=2ms) and 5% straggler probability (10x multiplier).
 
 | Configuration    |  p50  |  p90  |   p95  |   p99  |  p999   | Overhead |
 |------------------|-------|-------|--------|--------|---------|----------|
@@ -56,7 +56,7 @@ Reproduce: `cd benchmark/simulate && go run .`
 
 **1. DDSketch quantile estimator.** Each target host gets a `WindowedSketch`, a pair of DDSketches rotating every 30 seconds. DDSketch uses logarithmic bucket mapping to provide relative-error guarantees: any quantile estimate is within ±1% of the true value, regardless of the value's magnitude. This matters for latency: a 1% error on a 10ms p90 is 0.1ms, not a fixed absolute error. The rolling window ensures the sketch tracks current conditions, not the entire history.
 
-**2. Adaptive trigger.** On each request, the transport queries the sketch for the configured percentile (default p90). If the primary has not responded by that deadline, a backup request is fired using a child context derived from the caller's. Whichever response arrives first is returned; the loser's context is cancelled and its body drained to return the connection to the pool.
+**2. Adaptive trigger.** On each request, the transport queries the sketch for the configured percentile (default p90). For the first 20 requests to a new host, before the sketch has enough samples, a fixed 10ms warmup delay is used instead. If the primary has not responded by that deadline, a backup request is fired using a child context derived from the caller's. Whichever response arrives first is returned; the loser's context is cancelled and its body drained to return the connection to the pool.
 
 **3. Token bucket budget.** Hedges are rate-limited by a token bucket that refills at `estimatedRPS × budgetPercent / 100` tokens per second (defaults: 100 RPS, 10%). During genuine outages, when every request stalls and the p90 estimate collapses to the minimum delay, the bucket drains within seconds and hedging stops, preventing the load-doubling spiral that would deepen the incident.
 
@@ -150,8 +150,8 @@ fmt.Printf("hedge_rate=%.2f\n", stats.HedgeRate())
 
 ## References
 
-- Jeffrey Dean and Luiz André Barroso. ["The Tail at Scale."](https://research.google/pubs/the-tail-at-scale/) *Communications of the ACM*, 56(2):74–80, February 2013.
-- Charles Masson, Jee E. Rim, and Homin K. Lee. ["DDSketch: A Fast and Fully-Mergeable Quantile Sketch with Relative-Error Guarantees."](https://arxiv.org/abs/2004.08604) *Proceedings of the VLDB Endowment*, 12(12):2195–2205, 2019.
+- Jeffrey Dean and Luiz André Barroso. ["The Tail at Scale."](https://research.google/pubs/the-tail-at-scale/) *Communications of the ACM*, 56(2):74-80, February 2013.
+- Charles Masson, Jee E. Rim, and Homin K. Lee. ["DDSketch: A Fast and Fully-Mergeable Quantile Sketch with Relative-Error Guarantees."](https://arxiv.org/abs/2004.08604) *Proceedings of the VLDB Endowment*, 12(12):2195-2205, 2019.
 
 
 ## Contributing
