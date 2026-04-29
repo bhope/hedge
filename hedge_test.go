@@ -409,8 +409,65 @@ func TestStats(t *testing.T) {
 	if snap.TotalRequests == 0 {
 		t.Error("Snapshot TotalRequests = 0")
 	}
+	if rate := snap.HedgeRate(); rate < 0 || rate > 1 {
+		t.Errorf("Snapshot().HedgeRate() = %v, want [0,1]", rate)
+	}
 	if rate := stats.HedgeRate(); rate < 0 || rate > 1 {
 		t.Errorf("HedgeRate() = %v, want [0,1]", rate)
+	}
+}
+
+func TestStatsSnapshotHedgeRateZeroTotal(t *testing.T) {
+	if rate := (StatsSnapshot{}).HedgeRate(); rate != 0 {
+		t.Fatalf("HedgeRate() = %v, want 0", rate)
+	}
+}
+
+func TestStatsServeHTTP(t *testing.T) {
+	stats := &Stats{}
+	stats.TotalRequests.Store(10)
+	stats.HedgedRequests.Store(2)
+	stats.HedgeWins.Store(1)
+	stats.PrimaryWins.Store(1)
+	stats.BudgetExhausted.Store(3)
+	stats.WarmupRequests.Store(4)
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+	stats.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "text/plain; version=0.0.4; charset=utf-8" {
+		t.Fatalf("Content-Type = %q", got)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		"hedge_total_requests_total 10",
+		"hedge_hedged_requests_total 2",
+		"hedge_hedge_wins_total 1",
+		"hedge_primary_wins_total 1",
+		"hedge_budget_exhausted_total 3",
+		"hedge_warmup_requests_total 4",
+		"hedge_hedge_rate 0.2",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("metrics body missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestStatsServeHTTPMethodNotAllowed(t *testing.T) {
+	rec := httptest.NewRecorder()
+	(&Stats{}).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/metrics", nil))
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+	}
+	if got := rec.Header().Get("Allow"); got != "GET, HEAD" {
+		t.Fatalf("Allow = %q", got)
 	}
 }
 
