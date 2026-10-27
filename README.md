@@ -31,6 +31,7 @@ resp, err := client.Get("https://api.example.com/data")
 - [gRPC support](#grpc-support)
 - [Configuration](#configuration)
 - [Observability](#observability)
+  - [Prometheus metrics](#prometheus-metrics)
 - [References](#references)
 - [Contributing](#contributing)
 - [License](#license)
@@ -161,6 +162,35 @@ fmt.Printf("hedge_rate=%.2f\n", stats.HedgeRate())
 
 `Stats` fields are `atomic.Int64` and safe to read concurrently. `Snapshot()` takes a consistent point-in-time copy. `HedgeRate()` returns `HedgedRequests / TotalRequests`.
 
+### Prometheus metrics
+
+The optional `prom` module (separate `go.mod`, so `prometheus/client_golang` is only pulled in if you use it) exposes `Stats` as a Prometheus collector:
+
+```sh
+go get github.com/bhope/hedge/prom
+```
+
+```go
+import (
+    "github.com/bhope/hedge/prom"
+    "github.com/prometheus/client_golang/prometheus"
+)
+
+var stats *hedge.Stats
+
+client := &http.Client{
+    Transport: hedge.New(http.DefaultTransport, hedge.WithStats(&stats)),
+}
+
+prometheus.MustRegister(prom.NewStatsCollector(stats))
+```
+
+Exported metrics (namespace `hedge`): `hedge_requests_total`,
+`hedge_hedged_requests_total`, `hedge_hedge_wins_total`,
+`hedge_primary_wins_total`, `hedge_budget_exhausted_total`,
+`hedge_warmup_requests_total` (counters) and `hedge_hedge_rate` (gauge,
+0–1). Values are read from the atomic counters on every scrape, so the
+collector requires no extra goroutines.
 
 ## References
 
