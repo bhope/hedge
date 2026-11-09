@@ -45,7 +45,7 @@ func warmup(t *testing.T, tr http.RoundTripper, url string, n int) {
 		if err != nil {
 			t.Fatalf("warmup request %d failed: %v", i, err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 }
 
@@ -66,7 +66,7 @@ func TestNoHedgeWhenFast(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if n := stats.HedgedRequests.Load(); n != 0 {
 		t.Errorf("HedgedRequests = %d, want 0", n)
@@ -94,7 +94,7 @@ func TestHedgeWhenSlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if n := stats.HedgedRequests.Load(); n == 0 {
 		t.Error("expected HedgedRequests > 0")
@@ -138,7 +138,7 @@ func TestHedgeWins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if got := resp.Header.Get("X-Responder"); got != "hedge" {
 		t.Errorf("X-Responder = %q, want hedge", got)
@@ -165,7 +165,7 @@ func TestPrimaryWins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if n := stats.HedgedRequests.Load(); n != 0 {
 		t.Errorf("HedgedRequests = %d, want 0", n)
@@ -199,7 +199,7 @@ func TestBudgetExhaustion(t *testing.T) {
 			req, _ := http.NewRequest("GET", srv.URL, nil)
 			resp, err := tr.RoundTrip(req)
 			if err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 		}()
 	}
@@ -244,7 +244,7 @@ func TestNoHedgeForPOST(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if delta := stats.HedgedRequests.Load() - before; delta != 0 {
 		t.Errorf("HedgedRequests delta = %d, want 0 for POST without GetBody", delta)
@@ -274,7 +274,7 @@ func TestHedgeWithGetBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if n := stats.HedgedRequests.Load(); n == 0 {
 		t.Error("expected HedgedRequests > 0 for POST with GetBody")
@@ -306,7 +306,7 @@ func TestContextCancellation(t *testing.T) {
 	go func() {
 		resp, err := tr.RoundTrip(req)
 		if err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 		done <- err
 	}()
@@ -340,7 +340,7 @@ func TestWarmupPhase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if n := stats.WarmupRequests.Load(); n == 0 {
 		t.Error("expected WarmupRequests > 0 during warmup phase")
@@ -373,7 +373,7 @@ func TestConcurrent(t *testing.T) {
 			req, _ := http.NewRequest("GET", srv.URL, nil)
 			resp, err := tr.RoundTrip(req)
 			if err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 		}()
 	}
@@ -403,7 +403,7 @@ func TestStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	snap := stats.Snapshot()
 	if snap.TotalRequests == 0 {
@@ -428,7 +428,7 @@ func TestWithMaxHedges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 func TestHedgeAllowedForNoBody(t *testing.T) {
@@ -454,7 +454,7 @@ func TestHedgeAllowedForNoBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if delta := stats.HedgedRequests.Load() - before; delta == 0 {
 		t.Error("expected hedge for POST with http.NoBody (no body to re-send)")
@@ -490,7 +490,7 @@ func TestHedgeWithGetBodyReliable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if delta := stats.HedgedRequests.Load() - before; delta == 0 {
 		t.Error("expected HedgedRequests > 0 for POST with GetBody on slow backend")
@@ -511,7 +511,7 @@ func TestDrainLoserBody(t *testing.T) {
 			}
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("response body"))
+		_, _ = w.Write([]byte("response body"))
 	}))
 	defer srv.Close()
 
@@ -527,7 +527,7 @@ func TestDrainLoserBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if n := stats.HedgeWins.Load(); n == 0 {
 		t.Error("expected HedgeWins > 0")
@@ -556,7 +556,7 @@ func TestTTFTMeasurement(t *testing.T) {
 		case <-r.Context().Done():
 			return
 		}
-		w.Write([]byte("token"))
+		_, _ = w.Write([]byte("token"))
 	}))
 	defer srv.Close()
 
@@ -573,8 +573,8 @@ func TestTTFTMeasurement(t *testing.T) {
 		if err != nil {
 			t.Fatalf("warmup request %d failed: %v", i, err)
 		}
-		io.ReadAll(resp.Body) // must read body so ttftBody fires
-		resp.Body.Close()
+		_, _ = io.ReadAll(resp.Body) // must read body so ttftBody fires
+		_ = resp.Body.Close()
 	}
 
 	fast := LatencyEstimate(tr, srv.URL[len("http://"):], 0.9)
@@ -590,8 +590,8 @@ func TestTTFTMeasurement(t *testing.T) {
 		if err != nil {
 			t.Fatalf("slow request %d failed: %v", i, err)
 		}
-		io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_, _ = io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
 	}
 
 	slow := LatencyEstimate(tr, srv.URL[len("http://"):], 0.9)

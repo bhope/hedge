@@ -26,7 +26,7 @@ func BenchmarkRoundTripBaseline(b *testing.B) {
 			req, _ := http.NewRequestWithContext(context.Background(), "GET", srv.URL, nil)
 			resp, err := tr.RoundTrip(req)
 			if err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 		}
 	})
@@ -43,7 +43,7 @@ func BenchmarkRoundTripNoHedge(b *testing.B) {
 	for i := 0; i < 25; i++ {
 		req, _ := http.NewRequestWithContext(context.Background(), "GET", srv.URL, nil)
 		resp, _ := tr.RoundTrip(req)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 
 	b.ResetTimer()
@@ -52,7 +52,7 @@ func BenchmarkRoundTripNoHedge(b *testing.B) {
 			req, _ := http.NewRequestWithContext(context.Background(), "GET", srv.URL, nil)
 			resp, err := tr.RoundTrip(req)
 			if err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 		}
 	})
@@ -77,7 +77,7 @@ func BenchmarkRoundTripWithHedge(b *testing.B) {
 	for i := 0; i < 25; i++ {
 		req, _ := http.NewRequestWithContext(context.Background(), "GET", srv.URL, nil)
 		resp, _ := tr.RoundTrip(req)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 
 	b.ResetTimer()
@@ -85,7 +85,7 @@ func BenchmarkRoundTripWithHedge(b *testing.B) {
 		req, _ := http.NewRequestWithContext(context.Background(), "GET", srv.URL, nil)
 		resp, err := tr.RoundTrip(req)
 		if err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 	}
 }
