@@ -11,7 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: ["1.21", "1.22"]
+        # Minimum supported (from go.mod) and latest stable.
+        go: ["1.26.x", "1.27.x"]
+    env:
+      # Fail instead of silently downloading a newer toolchain, so each
+      # matrix entry really tests the Go version it names.
+      GOTOOLCHAIN: local
 
     steps:
       - uses: actions/checkout@v4
@@ -28,3 +33,14 @@ jobs:
         with:
           name: coverage-go${{ matrix.go }}
           path: coverage.out
+
+  vulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
