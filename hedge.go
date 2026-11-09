@@ -268,8 +268,8 @@ func drainLoser(ch <-chan result) {
 	if !ok || res.resp == nil {
 		return
 	}
-	io.Copy(io.Discard, io.LimitReader(res.resp.Body, drainLimit))
-	res.resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(res.resp.Body, drainLimit))
+	_ = res.resp.Body.Close()
 }
 
 // LatencyEstimate returns the current hedge-delay threshold the transport
