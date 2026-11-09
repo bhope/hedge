@@ -17,7 +17,7 @@ func newTestConn(t *testing.T) *grpc.ClientConn {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { cc.Close() })
+	t.Cleanup(func() { _ = cc.Close() })
 	return cc
 }
 

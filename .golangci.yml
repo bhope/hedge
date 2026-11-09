@@ -1,0 +1,17 @@
+version: "2"
+
+linters:
+  # "standard" = errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  enable:
+    # Go Report Card's checks, plus a couple of cheap extras.
+    - gocyclo
+    - misspell
+    - unconvert
+  settings:
+    gocyclo:
+      min-complexity: 15
+
+formatters:
+  enable:
+    - gofmt
