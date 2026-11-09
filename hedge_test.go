@@ -499,41 +499,74 @@ func TestHedgeWithGetBodyReliable(t *testing.T) {
 
 // TestDrainLoserBody ensures the loser's body is drained when both goroutines
 // return responses (hedge wins scenario with a real response body from primary).
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// endlessBody is an infinite response body that records how many bytes were
+// read from it and signals when it is closed.
+type endlessBody struct {
+	read   atomic.Int64
+	closed chan struct{}
+}
+
+func (b *endlessBody) Read(p []byte) (int, error) {
+	b.read.Add(int64(len(p)))
+	return len(p), nil
+}
+
+func (b *endlessBody) Close() error {
+	close(b.closed)
+	return nil
+}
+
+// TestDrainLoserBody verifies that when the losing request still produces a
+// response (e.g. headers arrived just as it was cancelled), drainLoser reads
+// at most drainLimit bytes of its body and closes it, so the connection is
+// released instead of leaked.
 func TestDrainLoserBody(t *testing.T) {
-	callCount := atomic.Int32{}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := callCount.Add(1)
-		if n == 1 {
-			select {
-			case <-time.After(500 * time.Millisecond):
-			case <-r.Context().Done():
-				return
-			}
+	loserBody := &endlessBody{closed: make(chan struct{})}
+	release := make(chan struct{})
+	var calls atomic.Int32
+
+	base := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if calls.Add(1) == 1 {
+			// Primary: slow, and returns a response even after cancellation.
+			<-release
+			return &http.Response{StatusCode: http.StatusOK, Body: loserBody, Request: r}, nil
 		}
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("response body"))
-	}))
-	defer srv.Close()
+		// Hedge: fast winner.
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader("winner")),
+			Request:    r,
+		}, nil
+	})
 
-	tr, stats := newTransport(t,
-		WithBudgetPercent(100),
-		WithMinDelay(time.Millisecond),
-		WithPercentile(0.5),
-	)
-	warmup(t, tr, srv.URL, 25)
+	var stats *Stats
+	tr := New(base, WithStats(&stats))
 
-	req, _ := http.NewRequest("GET", srv.URL, nil)
+	req, _ := http.NewRequest("GET", "http://example.test/", nil)
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
-	if n := stats.HedgeWins.Load(); n == 0 {
-		t.Error("expected HedgeWins > 0")
+	if n := stats.HedgeWins.Load(); n != 1 {
+		t.Fatalf("HedgeWins = %d, want 1", n)
 	}
-	// give drainLoser goroutine time to finish
-	time.Sleep(600 * time.Millisecond)
+
+	close(release) // let the losing primary return its response
+
+	select {
+	case <-loserBody.closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("loser response body was not closed")
+	}
+	if got := loserBody.read.Load(); got != drainLimit {
+		t.Errorf("drained %d bytes from loser body, want exactly drainLimit (%d)", got, drainLimit)
+	}
 }
 
 // TestTTFTMeasurement verifies that the sketch records time-to-first-byte rather
