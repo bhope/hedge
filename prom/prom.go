@@ -94,5 +94,10 @@ func (c *statsCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.primaryWins, prometheus.CounterValue, float64(snap.PrimaryWins))
 	ch <- prometheus.MustNewConstMetric(c.budgetExhausted, prometheus.CounterValue, float64(snap.BudgetExhausted))
 	ch <- prometheus.MustNewConstMetric(c.warmupRequests, prometheus.CounterValue, float64(snap.WarmupRequests))
-	ch <- prometheus.MustNewConstMetric(c.hedgeRate, prometheus.GaugeValue, c.stats.HedgeRate())
+
+	rate := 0.0
+	if snap.TotalRequests > 0 {
+		rate = float64(snap.HedgedRequests) / float64(snap.TotalRequests)
+	}
+	ch <- prometheus.MustNewConstMetric(c.hedgeRate, prometheus.GaugeValue, rate)
 }
